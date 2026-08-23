@@ -15,18 +15,18 @@ colors:
   danger: "#f09c86"
 typography:
   display:
-    fontFamily: "Geist, Arial, sans-serif"
+    fontFamily: "Barlow Condensed, Arial Narrow, Arial, sans-serif"
     fontSize: "clamp(3.35rem, 8vw, 6.5rem)"
     fontWeight: 560
     lineHeight: 0.88
     letterSpacing: "-0.085em"
   body:
-    fontFamily: "Geist, Arial, sans-serif"
+    fontFamily: "Barlow Condensed, Arial Narrow, Arial, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.65
   data:
-    fontFamily: "Geist Mono, SFMono-Regular, Consolas, monospace"
+    fontFamily: "JetBrains Mono, SFMono-Regular, Consolas, monospace"
     fontSize: "0.62rem"
     fontWeight: 400
     lineHeight: 1.4
