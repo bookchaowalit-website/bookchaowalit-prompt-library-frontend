@@ -1,197 +1,224 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-function Shell({
-  title,
-  subtitle,
-  badge = "Portfolio demo · local-only",
-  children,
-}: {
+type Stage = "Draft" | "Refine" | "Ready" | "Retired";
+type Area = "Engineering" | "Research" | "Writing";
+
+type PromptRecipe = {
+  id: string;
   title: string;
-  subtitle: string;
-  badge?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-100">
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <header className="mb-8">
-          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">{badge}</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">{title}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
-        </header>
-        {children}
-        <footer className="mt-10 border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800">
-          Honest demo: no multi-tenant backend. State (if any) stays in this browser.
-        </footer>
-      </div>
-    </div>
-  );
-}
+  area: Area;
+  stage: Stage;
+  purpose: string;
+  content: string;
+  updatedAt: number;
+};
 
-function Button({
-  children,
-  onClick,
-  variant = "primary",
-  disabled,
-  type = "button",
-  className = "",
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  disabled?: boolean;
-  type?: "button" | "submit";
-  className?: string;
-}) {
-  const base =
-    "inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-50 " +
-    className;
-  const styles =
-    variant === "primary"
-      ? "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
-      : variant === "secondary"
-        ? "bg-white text-zinc-900 ring-1 ring-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-700"
-        : variant === "danger"
-          ? "bg-red-600 text-white hover:bg-red-500"
-          : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900";
-  return (
-    <button type={type} disabled={disabled} onClick={onClick} className={`${base} ${styles}`}>
-      {children}
-    </button>
-  );
-}
+const STAGES: Stage[] = ["Draft", "Refine", "Ready", "Retired"];
+const AREAS: Area[] = ["Engineering", "Research", "Writing"];
 
-const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950";
+const SEED: PromptRecipe[] = [
+  {
+    id: "review-diff",
+    title: "Review a diff for behavior, not just style",
+    area: "Engineering",
+    stage: "Ready",
+    purpose: "A second pair of eyes for regressions and unclear assumptions.",
+    content: "Review the following code change as a senior engineer. Identify behavior regressions, missing edge cases, unsafe assumptions, and tests that should be added. Prioritize findings by impact. If the change is sound, say what evidence supports that conclusion.\n\nDIFF:\n{{paste diff here}}",
+    updatedAt: Date.parse("2026-08-20"),
+  },
+  {
+    id: "research-brief",
+    title: "Turn a question into a research brief",
+    area: "Research",
+    stage: "Refine",
+    purpose: "Shape an open question before collecting sources or opinions.",
+    content: "Help me turn this loose question into a research brief. State the decision it could inform, define what we know and do not know, list three falsifiable sub-questions, and propose evidence that would change the decision. Do not answer the question yet.\n\nQUESTION:\n{{question}}",
+    updatedAt: Date.parse("2026-08-17"),
+  },
+  {
+    id: "plain-language",
+    title: "Rewrite a technical note for a human reader",
+    area: "Writing",
+    stage: "Ready",
+    purpose: "Keep the technical truth while removing unnecessary ceremony.",
+    content: "Rewrite the note below for a capable reader who does not share the author's context. Keep the claim, constraints, and uncertainty intact. Prefer concrete verbs, short paragraphs, and examples where they remove ambiguity. Return only the revised note, followed by a short list of meaningful changes.\n\nNOTE:\n{{paste note here}}",
+    updatedAt: Date.parse("2026-08-12"),
+  },
+  {
+    id: "decision-memo",
+    title: "Expose the decision inside a messy memo",
+    area: "Research",
+    stage: "Draft",
+    purpose: "Separate evidence, interpretation, and the next reversible move.",
+    content: "Read the memo below and return four sections: decision being made, evidence directly observed, interpretation or assumption, and the smallest reversible next move. Flag any sentence that claims more certainty than the evidence allows.\n\nMEMO:\n{{paste memo here}}",
+    updatedAt: Date.parse("2026-08-08"),
+  },
+];
 
 function useLocalStorage<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial);
   const [ready, setReady] = useState(false);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw != null) setValue(JSON.parse(raw) as T);
+      // Browser storage is external state; this read intentionally follows hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (raw) setValue(JSON.parse(raw) as T);
     } catch {
-      /* ignore */
+      // Keep the sample recipes if storage is unavailable.
     }
     setReady(true);
   }, [key]);
+
   useEffect(() => {
-    if (!ready) return;
-    localStorage.setItem(key, JSON.stringify(value));
+    if (ready) localStorage.setItem(key, JSON.stringify(value));
   }, [key, value, ready]);
+
   return [value, setValue] as const;
 }
 
-function uid() {
-  return crypto.randomUUID();
+function createId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `recipe-${Date.now()}`;
 }
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-
-type Item = { id: string; title: string; body: string; status: string; createdAt: number };
-
-const SEED: Item[] = [{"title": "Code review", "body": "Review this diff for bugs and clarity.", "status": "Engineering"}].map((x: any, i: number) => ({
-  id: String(x.id ?? i + 1),
-  title: x.title,
-  body: x.body,
-  status: x.status,
-  createdAt: x.createdAt ?? Date.now() - i * 86400000,
-}));
-
-const FIELDS = [{"key": "title", "label": "Title", "type": "text"}, {"key": "body", "label": "Details", "type": "textarea"}, {"key": "status", "label": "Status", "type": "select", "options": ["Draft", "Active", "Done"]}] as { key: "title" | "body" | "status"; label: string; type: string; options?: string[] }[];
 
 export default function Home() {
-  const [items, setItems] = useLocalStorage<Item[]>("prompts-v1", SEED);
+  const [recipes, setRecipes] = useLocalStorage<PromptRecipe[]>("prompt-workbench-v2", SEED);
   const [query, setQuery] = useState("");
-  const [draft, setDraft] = useState<Record<string, string>>(() =>
-    Object.fromEntries(FIELDS.map((f) => [f.key, f.options?.[0] ?? ""]))
-  );
+  const [stageFilter, setStageFilter] = useState<Stage | "All">("All");
+  const [areaFilter, setAreaFilter] = useState<Area | "All">("All");
+  const [selectedId, setSelectedId] = useState(SEED[0]?.id ?? "");
+  const [editingText, setEditingText] = useState(SEED[0]?.content ?? "");
+  const [notice, setNotice] = useState("");
+  const [newRecipe, setNewRecipe] = useState({ title: "", purpose: "", content: "", area: "Engineering" as Area, stage: "Draft" as Stage });
 
-  const filtered = items.filter((it) =>
-    (it.title + it.body + it.status).toLowerCase().includes(query.toLowerCase())
-  );
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return recipes.filter((recipe) => {
+      const matchesStage = stageFilter === "All" || recipe.stage === stageFilter;
+      const matchesArea = areaFilter === "All" || recipe.area === areaFilter;
+      const matchesQuery = !needle || `${recipe.title} ${recipe.purpose} ${recipe.content} ${recipe.area}`.toLowerCase().includes(needle);
+      return matchesStage && matchesArea && matchesQuery;
+    });
+  }, [areaFilter, query, recipes, stageFilter]);
 
-  const add = () => {
-    if (!String(draft.title || "").trim()) return;
-    setItems((prev) => [
-      {
-        id: uid(),
-        title: draft.title || "",
-        body: draft.body || "",
-        status: draft.status || "",
-        createdAt: Date.now(),
-      },
-      ...prev,
-    ]);
-    setDraft(Object.fromEntries(FIELDS.map((f) => [f.key, f.options?.[0] ?? ""])));
-  };
+  const selected = recipes.find((recipe) => recipe.id === selectedId) ?? visible[0] ?? recipes[0];
+
+  function selectRecipe(recipe: PromptRecipe) {
+    setSelectedId(recipe.id);
+    setEditingText(recipe.content);
+    setNotice("");
+  }
+
+  function saveRevision() {
+    if (!selected) return;
+    setRecipes((current) => current.map((recipe) => recipe.id === selected.id ? { ...recipe, content: editingText, updatedAt: Date.now() } : recipe));
+    setNotice("Revision saved in this browser.");
+  }
+
+  async function copyRecipe() {
+    if (!selected) return;
+    try {
+      await navigator.clipboard.writeText(editingText);
+      setNotice("Prompt copied. The next handoff starts with this exact text.");
+    } catch {
+      setNotice("Copy was blocked by the browser. Select the text and copy it manually.");
+    }
+  }
+
+  function removeRecipe() {
+    if (!selected) return;
+    setRecipes((current) => {
+      const remaining = current.filter((recipe) => recipe.id !== selected.id);
+      const next = remaining[0];
+      if (next) {
+        setSelectedId(next.id);
+        setEditingText(next.content);
+      } else {
+        setSelectedId("");
+        setEditingText("");
+      }
+      return remaining;
+    });
+    setNotice("Recipe removed from this browser.");
+  }
+
+  function addRecipe(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newRecipe.title.trim() || !newRecipe.content.trim()) return;
+    const recipe: PromptRecipe = { id: createId(), title: newRecipe.title.trim(), purpose: newRecipe.purpose.trim() || "A local recipe waiting for a clearer purpose.", content: newRecipe.content.trim(), area: newRecipe.area, stage: newRecipe.stage, updatedAt: Date.now() };
+    setRecipes((current) => [recipe, ...current]);
+    setStageFilter("All");
+    setAreaFilter("All");
+    selectRecipe(recipe);
+    setNewRecipe({ title: "", purpose: "", content: "", area: "Engineering", stage: "Draft" });
+    setNotice("Recipe added to the workbench.");
+  }
 
   return (
-    <Shell title="Prompt Library" subtitle="Save reusable AI prompts.">
-      <div className="mb-4 flex flex-wrap gap-2">
-        <input className={`${inputClass} max-w-sm`} placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <span className="self-center text-sm text-zinc-500">{filtered.length} items</span>
-      </div>
-      <div className="mb-6 grid gap-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 md:grid-cols-2">
-        {FIELDS.map((f) => (
-          <label key={f.key} className="block space-y-1">
-            <span className="text-xs font-medium text-zinc-500">{f.label}</span>
-            {f.type === "textarea" ? (
-              <textarea
-                className={`${inputClass} min-h-[72px]`}
-                value={draft[f.key] || ""}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              />
-            ) : f.type === "select" ? (
-              <select
-                className={inputClass}
-                value={draft[f.key] || ""}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              >
-                {(f.options || []).map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className={inputClass}
-                value={draft[f.key] || ""}
-                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-              />
-            )}
-          </label>
-        ))}
-        <div className="md:col-span-2">
-          <Button onClick={add}>Add</Button>
-        </div>
-      </div>
-      <ul className="space-y-2">
-        {filtered.map((it) => (
-          <li key={it.id} className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <div className="font-medium">{it.title}</div>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{it.body}</p>
-                <span className="mt-2 inline-block rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-900">{it.status}</span>
+    <main className="prompt-workbench">
+      <div className="workbench-frame">
+        <header className="workbench-header">
+          <div className="workbench-mark"><span className="mark-line" aria-hidden="true" />PROMPT / WORKBENCH</div>
+          <p>LOCAL RECIPE SHELF · {recipes.length.toString().padStart(2, "0")} CUES</p>
+        </header>
+
+        <section className="workbench-hero" aria-labelledby="page-title">
+          <div>
+            <h1 id="page-title">Make the next prompt easier to trust.</h1>
+            <p>Keep the instruction visible, tune it against real work, and hand it off only when its next use is clear.</p>
+          </div>
+          <div className="hero-readout"><strong>{visible.length.toString().padStart(2, "0")}</strong><span>RECIPES<br />IN CUT</span></div>
+        </section>
+
+        <nav className="cue-rail" aria-label="Prompt lifecycle filter">
+          <button type="button" aria-pressed={stageFilter === "All"} onClick={() => setStageFilter("All")}><span>ALL CUES</span><small>{recipes.length}</small></button>
+          {STAGES.map((stage) => <button key={stage} type="button" className={`stage-${stage.toLowerCase()}`} aria-pressed={stageFilter === stage} onClick={() => setStageFilter(stage)}><span>{stage.toUpperCase()}</span><small>{recipes.filter((recipe) => recipe.stage === stage).length}</small></button>)}
+        </nav>
+
+        <section className="workbench-body" aria-label="Prompt recipe workbench">
+          <aside className="recipe-index">
+            <div className="index-tools">
+              <label className="search-line"><span>FIND A RECIPE</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, purpose, or text" /></label>
+              <div className="area-filters" role="group" aria-label="Filter recipes by area">
+                {(["All", ...AREAS] as const).map((area) => <button key={area} type="button" aria-pressed={areaFilter === area} onClick={() => setAreaFilter(area)}>{area}</button>)}
               </div>
-              <Button variant="ghost" onClick={() => setItems((prev) => prev.filter((x) => x.id !== it.id))}>
-                Delete
-              </Button>
             </div>
-          </li>
-        ))}
-      </ul>
-    </Shell>
+            <div className="index-heading"><p className="label">RECIPE INDEX</p><span>{visible.length} / {recipes.length}</span></div>
+            {visible.length > 0 ? (
+              <ul className="recipe-list">
+                {visible.map((recipe) => <li key={recipe.id}><button type="button" className={`recipe-row${selected?.id === recipe.id ? " is-selected" : ""}`} onClick={() => selectRecipe(recipe)}><span className="recipe-stage">{recipe.stage}</span><strong>{recipe.title}</strong><span className="recipe-area">{recipe.area}</span></button></li>)}
+              </ul>
+            ) : <div className="empty-index"><strong>No recipe in this cut.</strong><span>Clear a filter or add a new cue.</span></div>}
+            <details className="new-recipe">
+              <summary>PLACE A NEW CUE</summary>
+              <form onSubmit={addRecipe}>
+                <label><span>Name</span><input value={newRecipe.title} onChange={(event) => setNewRecipe((current) => ({ ...current, title: event.target.value }))} placeholder="Recipe name" required /></label>
+                <label><span>Purpose</span><input value={newRecipe.purpose} onChange={(event) => setNewRecipe((current) => ({ ...current, purpose: event.target.value }))} placeholder="What is it for?" /></label>
+                <label><span>Instruction</span><textarea value={newRecipe.content} onChange={(event) => setNewRecipe((current) => ({ ...current, content: event.target.value }))} placeholder="Write the handoff" rows={5} required /></label>
+                <div className="new-recipe-row"><label><span>Area</span><select value={newRecipe.area} onChange={(event) => setNewRecipe((current) => ({ ...current, area: event.target.value as Area }))}>{AREAS.map((area) => <option key={area}>{area}</option>)}</select></label><label><span>Stage</span><select value={newRecipe.stage} onChange={(event) => setNewRecipe((current) => ({ ...current, stage: event.target.value as Stage }))}>{STAGES.map((stage) => <option key={stage}>{stage}</option>)}</select></label></div>
+                <button className="add-cue" type="submit">Add cue</button>
+              </form>
+            </details>
+          </aside>
+
+          <section className="prompt-bay" aria-label="Selected prompt recipe">
+            {selected ? <>
+              <div className="prompt-meta"><span>{selected.stage}</span><span>{selected.area}</span><span>EDITED {new Date(selected.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span></div>
+              <h2>{selected.title}</h2>
+              <p className="prompt-purpose">{selected.purpose}</p>
+              <label className="instruction-label"><span>INSTRUCTION · EDITABLE</span><textarea value={editingText} onChange={(event) => setEditingText(event.target.value)} rows={13} /></label>
+              <div className="prompt-actions"><button type="button" className="save-cue" onClick={saveRevision}>Save revision</button><button type="button" className="copy-cue" onClick={copyRecipe}>Copy exact text</button><button type="button" className="remove-cue" onClick={removeRecipe}>Remove</button></div>
+              <p className="prompt-notice" role="status" aria-live="polite">{notice}</p>
+              <div className="handoff-note"><span className="label">HANDOFF</span><p>This library stores the instruction only. Choose the model, context, and review standard in the tool where you run it.</p></div>
+            </> : <div className="empty-bay"><strong>The workbench is clear.</strong><span>Place a cue on the left to start.</span></div>}
+          </section>
+        </section>
+
+        <footer className="workbench-footer"><span>PROMPT / WORKBENCH · PRIVATE BY DEFAULT</span><span>No model connection. No output claims. Just reusable instruction.</span></footer>
+      </div>
+    </main>
   );
 }

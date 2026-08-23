@@ -8,16 +8,16 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Prompt Library | Bookchaowalit",
-  description: "Save reusable AI prompts.",
+  title: "Prompt Workbench | Bookchaowalit",
+  description: "A local recipe shelf for preparing and reusing prompt instructions.",
   keywords: ["prompt-library", "portfolio"],
   authors: [{ name: "Bookchaowalit", url: "https://bookchaowalit.com" }],
   creator: "Bookchaowalit",
   metadataBase: new URL("https://bookchaowalit.com"),
   openGraph: {
     type: "website",
-    title: "Prompt Library | Bookchaowalit",
-    description: "Save reusable AI prompts.",
+    title: "Prompt Workbench | Bookchaowalit",
+    description: "A local recipe shelf for preparing and reusing prompt instructions.",
     siteName: "Bookchaowalit",
   },
   robots: { index: true, follow: true },

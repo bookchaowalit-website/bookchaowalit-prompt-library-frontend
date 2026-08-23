@@ -1,20 +1,20 @@
-# Prompt Library
+# Prompt Workbench
 
-Save reusable AI prompts.
+A local recipe shelf for preparing and reusing prompt instructions.
 
-## Features
-- CRUD list
-- Search
-- localStorage
+## What it does
 
-## Limitations
-- Local only
+- Browses prompt recipes by lifecycle stage and work area.
+- Searches name, purpose, and instruction text.
+- Edits a selected instruction, saves a browser-local revision, and copies its exact text.
+- Adds and removes local recipes.
+- Stores text only: there is no model API, provider connection, execution, billing, or output claim.
 
 ## Run
+
 ```bash
 npm install
 npm run dev
 ```
 
-## Honesty
-Portfolio demo. Not multi-tenant SaaS. Prefer local-only state over fake production claims.
+Open `http://localhost:3000`.
